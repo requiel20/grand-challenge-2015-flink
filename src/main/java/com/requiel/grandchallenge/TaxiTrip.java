@@ -25,6 +25,8 @@ public class TaxiTrip {
             payementType = PayementType.CRD;
         } else if (fields[10].equals("CSH")) {
             payementType = PayementType.CSH;
+        } else if (fields[10].equals("UNK")) {
+            payementType = PayementType.UNK;
         } else {
             log.error("Parsing error. Unknown payement type: {}", fields[10]);
             return null;

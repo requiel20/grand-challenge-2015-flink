@@ -4,15 +4,15 @@ import org.apache.flink.api.common.functions.FlatMapFunction;
 import org.apache.flink.core.fs.FileSystem;
 import org.apache.flink.streaming.api.TimeCharacteristic;
 import org.apache.flink.streaming.api.datastream.DataStream;
+import org.apache.flink.streaming.api.datastream.SingleOutputStreamOperator;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
 import org.apache.flink.streaming.api.functions.ProcessFunction;
 import org.apache.flink.util.Collector;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.Iterator;
-import java.util.List;
-import java.util.Map;
 
 /**
  * Skeleton for a Flink Streaming Job.
@@ -29,6 +29,10 @@ import java.util.Map;
 public class Solution {
 
     public static void main(String[] args) throws Exception {
+        Logger log = LoggerFactory.getLogger(Solution.class);
+
+        log.info(System.getProperty("user.dir"));
+
         String input = "grand-challenge-data.csv";
 
         final StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
@@ -37,23 +41,27 @@ public class Solution {
 
         DataStream<String> inputData = env.readTextFile(input);
 
-        DataStream<TaxiTrip> trips = inputData
-                .flatMap((FlatMapFunction<String, TaxiTrip>) (line, collector) -> {
+        DataStream<TaxiTrip> trips = inputData.flatMap(new Parser());
 
-
-                    TaxiTrip trip = TaxiTrip.fromString(line);
-                    if (trip != null) {
-                        collector.collect(trip);
-                    }
-                });
-
-        DataStream<CellBasedTaxiTrip> cellBasedTaxiTrips = trips.flatMap(new ToCellBasedTaxiTrip());
+        SingleOutputStreamOperator<CellBasedTaxiTrip> cellBasedTaxiTrips = trips.flatMap(new ToCellBasedTaxiTrip());
 
         cellBasedTaxiTrips
                 .process(new TopTen())
-                .writeAsText("grand-challenge-output.csv", FileSystem.WriteMode.OVERWRITE);
+                .setParallelism(1)
+                .writeAsText("grand-challenge-output", FileSystem.WriteMode.OVERWRITE)
+                .setParallelism(1);
 
         env.execute("Grand challenge 2015");
+    }
+
+    private static class Parser implements FlatMapFunction<String, TaxiTrip> {
+        @Override
+        public void flatMap(String line, Collector<TaxiTrip> collector) throws Exception {
+            TaxiTrip trip = TaxiTrip.fromString(line);
+            if (trip != null) {
+                collector.collect(trip);
+            }
+        }
     }
 
     private static class ToCellBasedTaxiTrip implements FlatMapFunction<TaxiTrip, CellBasedTaxiTrip> {
@@ -78,7 +86,7 @@ public class Solution {
             double end_x = toMetersX(taxiTrip.getDropoff_longitude(), taxiTrip.getDropoff_latitude());
             double end_y = toMetersY(taxiTrip.getDropoff_latitude());
 
-            if (start_x < origin_x | start_y < origin_y | end_x < origin_x | end_y < origin_y) {
+            if (start_x < origin_x | start_y > origin_y | end_x < origin_x | end_y > origin_y) {
                 return;
             }
 
@@ -92,39 +100,43 @@ public class Solution {
                 return;
             }
 
-            collector.collect(new CellBasedTaxiTrip(startCellX + "." + startCellY, endCellX + "." + endCellY, taxiTrip.getDropoff_datetime()));
+            collector.collect(new CellBasedTaxiTrip(startCellX + "." + startCellY, endCellX + "." + endCellY, taxiTrip.getDropoff_datetime(), taxiTrip.getPickup_datetime()));
         }
     }
 
     private static class TopTen extends ProcessFunction<CellBasedTaxiTrip, TenMostFrequentTrips> {
+        private ScoreKeeper<CellBasedTaxiTrip> scoreKeeper = new ScoreKeeper<>(10);
 
-        //TODO: replace this with a ordered array of CellBasedTaxiTripAndScore and a Map for ranking
-        private Map<CellBasedTaxiTrip, Integer> last30MinutesSum = new HashMap<>();
-
-        private List<CellBasedTaxiTrip> last30Minutes = new ArrayList<>();
+        private ArrayList<CellBasedTaxiTrip> last30Minutes = new ArrayList<>();
 
         @Override
         public void processElement(CellBasedTaxiTrip trip, Context context, Collector<TenMostFrequentTrips> collector) throws Exception {
             last30Minutes.add(trip);
 
-            last30MinutesSum.put(trip, last30MinutesSum.getOrDefault(trip, 0) + 1);
+            //increase score of new entry
+            if (scoreKeeper.increase(trip)) {
+                collector.collect(TenMostFrequentTrips.fromList(trip, scoreKeeper.getPodium(), delay(context)));
+            }
 
             Iterator<CellBasedTaxiTrip> iterator = last30Minutes.iterator();
 
+            //remove entries too old to matter
             while (iterator.hasNext()) {
                 CellBasedTaxiTrip oldTrip = iterator.next();
                 if (oldTrip.getEnd_time().isBefore(trip.getEnd_time().minusMinutes(30))) {
-                    int oldTripCount = last30MinutesSum.get(oldTrip);
-
-                    if(oldTripCount > 1) {
-                        last30MinutesSum.put(oldTrip, oldTripCount - 1);
-                    } else {
-                        last30MinutesSum.remove(oldTrip);
+                    if (scoreKeeper.decrease(trip)) {
+                        collector.collect(TenMostFrequentTrips.fromList(trip, scoreKeeper.getPodium(), delay(context)));
                     }
-
                     iterator.remove();
+                } else {
+                    break;
                 }
             }
         }
+
+        private double delay(Context context) {
+            return context.timerService().currentProcessingTime() - context.timestamp();
+        }
+
     }
 }

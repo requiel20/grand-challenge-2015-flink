@@ -10,13 +10,16 @@ public class CellBasedTaxiTrip {
 
     private LocalDateTime end_time;
 
-    public CellBasedTaxiTrip(String start_cell_id, String end_cell_id, LocalDateTime end_time) {
-        if (start_cell_id == null || end_cell_id == null | end_time == null) {
+    private LocalDateTime start_time;
+
+    public CellBasedTaxiTrip(String start_cell_id, String end_cell_id, LocalDateTime end_time, LocalDateTime start_time) {
+        if (start_cell_id == null || end_cell_id == null | end_time == null | start_time == null) {
             throw new IllegalArgumentException("null fields not permitted here");
         }
         this.start_cell_id = start_cell_id;
         this.end_cell_id = end_cell_id;
         this.end_time = end_time;
+        this.start_time = start_time;
     }
 
     public String getStart_cell_id() {
@@ -29,6 +32,10 @@ public class CellBasedTaxiTrip {
 
     public LocalDateTime getEnd_time() {
         return end_time;
+    }
+
+    public LocalDateTime getStart_time() {
+        return start_time;
     }
 
     @Override
