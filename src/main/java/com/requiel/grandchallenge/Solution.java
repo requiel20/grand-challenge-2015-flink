@@ -1,12 +1,21 @@
 package com.requiel.grandchallenge;
 
+import com.requiel.grandchallenge.scorekeeper.BucketScoreKeeper;
+import com.requiel.grandchallenge.scorekeeper.ScoreKeeper;
+import com.requiel.grandchallenge.scorekeeper.StupidScoreKeeper;
+import com.requiel.grandchallenge.types.CellBasedTaxiTrip;
+import com.requiel.grandchallenge.types.TaxiTrip;
+import com.requiel.grandchallenge.types.TenMostFrequentTrips;
 import org.apache.flink.api.common.functions.FlatMapFunction;
+import org.apache.flink.api.common.functions.RichFlatMapFunction;
+import org.apache.flink.api.java.utils.ParameterTool;
 import org.apache.flink.core.fs.FileSystem;
 import org.apache.flink.streaming.api.TimeCharacteristic;
 import org.apache.flink.streaming.api.datastream.DataStream;
 import org.apache.flink.streaming.api.datastream.SingleOutputStreamOperator;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
 import org.apache.flink.streaming.api.functions.ProcessFunction;
+import org.apache.flink.streaming.api.functions.timestamps.AscendingTimestampExtractor;
 import org.apache.flink.util.Collector;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -15,25 +24,31 @@ import java.util.ArrayList;
 import java.util.Iterator;
 
 /**
- * Skeleton for a Flink Streaming Job.
- *
- * <p>For a tutorial how to write a Flink streaming application, check the
- * tutorials and examples on the <a href="http://flink.apache.org/docs/stable/">Flink Website</a>.
- *
- * <p>To package your application into a JAR file for execution, run
+ * To package your application into a JAR file for execution, run
  * 'mvn clean package' on the command line.
- *
- * <p>If you change the name of the main class (with the public static void main(String[] args))
- * method, change the respective entry in the POM.xml file (simply search for 'mainClass').
  */
 public class Solution {
 
+    private static Logger log = LoggerFactory.getLogger(Solution.class);
+
+    private static String DEFAULT_INPUT_FILE = "grand-challenge-data-100.csv";
+    private static String DEFAULT_OUTPUT_FILE = "grand-challenge-output";
+
     public static void main(String[] args) throws Exception {
-        Logger log = LoggerFactory.getLogger(Solution.class);
 
-        log.info(System.getProperty("user.dir"));
+        String input, output;
 
-        String input = "grand-challenge-data.csv";
+        try {
+            input = ParameterTool.fromArgs(args).get("input", DEFAULT_INPUT_FILE);
+        } catch (Exception e) {
+            input = DEFAULT_INPUT_FILE;
+        }
+
+        try {
+            output = ParameterTool.fromArgs(args).get("output", DEFAULT_OUTPUT_FILE);
+        } catch (Exception e) {
+            output = DEFAULT_OUTPUT_FILE;
+        }
 
         final StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
 
@@ -41,20 +56,27 @@ public class Solution {
 
         DataStream<String> inputData = env.readTextFile(input);
 
-        DataStream<TaxiTrip> trips = inputData.flatMap(new Parser());
+        DataStream<TaxiTrip> trips = inputData
+                .flatMap(new Parser())
+                .assignTimestampsAndWatermarks(new AscendingTimestampExtractor<TaxiTrip>() {
+                    @Override
+                    public long extractAscendingTimestamp(TaxiTrip taxiTrip) {
+                        return System.currentTimeMillis();
+                    }
+                });
 
         SingleOutputStreamOperator<CellBasedTaxiTrip> cellBasedTaxiTrips = trips.flatMap(new ToCellBasedTaxiTrip());
 
         cellBasedTaxiTrips
                 .process(new TopTen())
                 .setParallelism(1)
-                .writeAsText("grand-challenge-output", FileSystem.WriteMode.OVERWRITE)
+                .writeAsText(output, FileSystem.WriteMode.OVERWRITE)
                 .setParallelism(1);
 
         env.execute("Grand challenge 2015");
     }
 
-    private static class Parser implements FlatMapFunction<String, TaxiTrip> {
+    private static class Parser extends RichFlatMapFunction<String, TaxiTrip> {
         @Override
         public void flatMap(String line, Collector<TaxiTrip> collector) throws Exception {
             TaxiTrip trip = TaxiTrip.fromString(line);
@@ -105,7 +127,7 @@ public class Solution {
     }
 
     private static class TopTen extends ProcessFunction<CellBasedTaxiTrip, TenMostFrequentTrips> {
-        private ScoreKeeper<CellBasedTaxiTrip> scoreKeeper = new ScoreKeeper<>(10);
+        private ScoreKeeper<CellBasedTaxiTrip> scoreKeeper = new StupidScoreKeeper<>(10);
 
         private ArrayList<CellBasedTaxiTrip> last30Minutes = new ArrayList<>();
 
@@ -135,7 +157,7 @@ public class Solution {
         }
 
         private double delay(Context context) {
-            return context.timerService().currentProcessingTime() - context.timestamp();
+            return System.currentTimeMillis() - context.timestamp();
         }
 
     }

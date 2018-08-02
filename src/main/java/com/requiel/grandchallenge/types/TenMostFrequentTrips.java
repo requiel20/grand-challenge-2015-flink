@@ -1,4 +1,4 @@
-package com.requiel.grandchallenge;
+package com.requiel.grandchallenge.types;
 
 import java.time.LocalDateTime;
 import java.util.List;

@@ -1,11 +1,10 @@
-package com.requiel.grandchallenge;
+package com.requiel.grandchallenge.scorekeeper;
 
-import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 
-public class ScoreKeeper<T> implements Serializable {
+public class StupidScoreKeeper<T> implements ScoreKeeper<T> {
 
     public static long serialVersionUID = 1L;
 
@@ -21,10 +20,11 @@ public class ScoreKeeper<T> implements Serializable {
      */
     private ArrayList<ElemAndScore<T>> inOrder = new ArrayList<>();
 
-    public ScoreKeeper(int podiumSize) {
+    public StupidScoreKeeper(int podiumSize) {
         this.podiumSize = podiumSize;
     }
 
+    @Override
     public boolean increase(T element) {
         if (positions.containsKey(element)) {
             int oldPosition = positions.get(element);
@@ -59,6 +59,7 @@ public class ScoreKeeper<T> implements Serializable {
         }
     }
 
+    @Override
     public boolean decrease(T element) {
         if (positions.containsKey(element)) {
             int oldPosition = positions.get(element);
@@ -69,7 +70,7 @@ public class ScoreKeeper<T> implements Serializable {
             if (elemAndScore.getScore() <= 0) {
                 positions.remove(element);
                 inOrder.remove(oldPosition);
-                if(inOrder.size() <= podiumSize) {
+                if (inOrder.size() <= podiumSize) {
                     return true;
                 } else {
                     return false;
@@ -104,10 +105,11 @@ public class ScoreKeeper<T> implements Serializable {
         inOrder.add(newPosition, elemAndScore);
     }
 
+    @Override
     public List<T> getPodium() {
         ArrayList<T> out = new ArrayList<>();
         for (int i = 0; i < podiumSize; i++) {
-            if(i < inOrder.size()) {
+            if (i < inOrder.size()) {
                 out.add(inOrder.get(i).getElement());
             } else {
                 out.add(null);

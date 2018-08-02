@@ -1,4 +1,4 @@
-package com.requiel.grandchallenge;
+package com.requiel.grandchallenge.types;
 
 public enum PayementType {
     CSH, CRD, UNK;

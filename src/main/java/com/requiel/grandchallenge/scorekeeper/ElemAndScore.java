@@ -1,4 +1,4 @@
-package com.requiel.grandchallenge;
+package com.requiel.grandchallenge.scorekeeper;
 
 import java.io.Serializable;
 
@@ -26,6 +26,11 @@ public class ElemAndScore<T> implements Serializable {
         if(score > 0) {
             score--;
         }
+    }
+
+    @Override
+    public String toString() {
+        return element + " score: " + score;
     }
 
     public int getScore() {
