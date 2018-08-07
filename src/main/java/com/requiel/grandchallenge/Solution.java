@@ -31,7 +31,7 @@ public class Solution {
 
     private static Logger log = LoggerFactory.getLogger(Solution.class);
 
-    private static String DEFAULT_INPUT_FILE = "grand-challenge-data-100.csv";
+    private static String DEFAULT_INPUT_FILE = "grand-challenge-data.csv";
     private static String DEFAULT_OUTPUT_FILE = "grand-challenge-output";
 
     public static void main(String[] args) throws Exception {
@@ -127,7 +127,7 @@ public class Solution {
     }
 
     private static class TopTen extends ProcessFunction<CellBasedTaxiTrip, TenMostFrequentTrips> {
-        private ScoreKeeper<CellBasedTaxiTrip> scoreKeeper = new StupidScoreKeeper<>(10);
+        private ScoreKeeper<CellBasedTaxiTrip> scoreKeeper = new BucketScoreKeeper<>(10);
 
         private ArrayList<CellBasedTaxiTrip> last30Minutes = new ArrayList<>();
 
