@@ -9,6 +9,9 @@ import com.requiel.grandchallenge.types.TenMostFrequentTrips;
 import org.apache.flink.api.common.functions.FlatMapFunction;
 import org.apache.flink.api.common.functions.RichFlatMapFunction;
 import org.apache.flink.api.java.utils.ParameterTool;
+import org.apache.flink.configuration.Configuration;
+import org.apache.flink.configuration.CoreOptions;
+import org.apache.flink.configuration.JobManagerOptions;
 import org.apache.flink.core.fs.FileSystem;
 import org.apache.flink.streaming.api.TimeCharacteristic;
 import org.apache.flink.streaming.api.datastream.DataStream;
@@ -50,7 +53,11 @@ public class Solution {
             output = DEFAULT_OUTPUT_FILE;
         }
 
-        final StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
+        Configuration conf = new Configuration();
+        conf.setString(CoreOptions.MODE, CoreOptions.LEGACY_MODE);
+        conf.setBoolean(JobManagerOptions.IS_GEO_SCHEDULING_ENABLED, true);
+
+        final StreamExecutionEnvironment env = StreamExecutionEnvironment.createLocalEnvironment(8, conf);
 
         env.setStreamTimeCharacteristic(TimeCharacteristic.IngestionTime);
 
