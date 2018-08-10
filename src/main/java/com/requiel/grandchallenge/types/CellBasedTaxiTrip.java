@@ -12,6 +12,8 @@ public class CellBasedTaxiTrip {
 
     private LocalDateTime start_time;
 
+    private long ingestionTime;
+
     private double total_amount;
 
     public CellBasedTaxiTrip(String start_cell_id, String end_cell_id, LocalDateTime end_time, LocalDateTime start_time, double total_amount) {
@@ -27,7 +29,7 @@ public class CellBasedTaxiTrip {
             throw new IllegalArgumentException("total amount must be positive");
         }
         this.total_amount = total_amount;
-
+        this.ingestionTime = System.currentTimeMillis();
     }
 
     public String getStart_cell_id() {
@@ -66,5 +68,9 @@ public class CellBasedTaxiTrip {
         int result = start_cell_id.hashCode();
         result = 31 * result + end_cell_id.hashCode();
         return result;
+    }
+
+    public long getIngestionTime() {
+        return ingestionTime;
     }
 }

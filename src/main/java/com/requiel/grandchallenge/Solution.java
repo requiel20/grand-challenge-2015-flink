@@ -1,13 +1,13 @@
 package com.requiel.grandchallenge;
 
-import com.requiel.grandchallenge.scorekeeper.AverageScoreKeeper;
 import com.requiel.grandchallenge.scorekeeper.BucketScoreKeeper;
 import com.requiel.grandchallenge.types.CellBasedTaxiTrip;
 import com.requiel.grandchallenge.types.TaxiTrip;
 import com.requiel.grandchallenge.types.TenMostFrequentTrips;
-import com.requiel.grandchallenge.types.TenMostProfitableAreas;
 import org.apache.flink.api.common.functions.FlatMapFunction;
+import org.apache.flink.api.common.functions.JoinFunction;
 import org.apache.flink.api.common.functions.RichFlatMapFunction;
+import org.apache.flink.api.java.functions.KeySelector;
 import org.apache.flink.api.java.utils.ParameterTool;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.configuration.CoreOptions;
@@ -15,16 +15,23 @@ import org.apache.flink.configuration.JobManagerOptions;
 import org.apache.flink.core.fs.FileSystem;
 import org.apache.flink.streaming.api.TimeCharacteristic;
 import org.apache.flink.streaming.api.datastream.DataStream;
-import org.apache.flink.streaming.api.datastream.SingleOutputStreamOperator;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
 import org.apache.flink.streaming.api.functions.ProcessFunction;
 import org.apache.flink.streaming.api.functions.timestamps.AscendingTimestampExtractor;
+import org.apache.flink.streaming.api.functions.windowing.AllWindowFunction;
+import org.apache.flink.streaming.api.windowing.assigners.SlidingEventTimeWindows;
+import org.apache.flink.streaming.api.windowing.time.Time;
+import org.apache.flink.streaming.api.windowing.windows.TimeWindow;
 import org.apache.flink.util.Collector;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.time.ZoneId;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.Iterator;
+import java.util.Map;
+import java.util.concurrent.TimeUnit;
 
 /**
  * To package your application into a JAR file for execution, run
@@ -35,7 +42,7 @@ public class Solution {
     private static Logger log = LoggerFactory.getLogger(Solution.class);
 
     private static String DEFAULT_INPUT_FILE = "grand-challenge-data.csv";
-    private static String DEFAULT_OUTPUT_FILE = "grand-challenge-output";
+    private static String DEFAULT_OUTPUT_FILE = "/home/requiel/Downloads/grand-challenge-output";
 
     public static void main(String[] args) throws Exception {
 
@@ -53,31 +60,83 @@ public class Solution {
             output = DEFAULT_OUTPUT_FILE;
         }
 
-        Configuration conf = new Configuration();
-        conf.setString(CoreOptions.MODE, CoreOptions.LEGACY_MODE);
-        conf.setBoolean(JobManagerOptions.IS_GEO_SCHEDULING_ENABLED, true);
+        final StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
 
-        final StreamExecutionEnvironment env = StreamExecutionEnvironment.createLocalEnvironment(8, conf);
+        env.setStreamTimeCharacteristic(TimeCharacteristic.EventTime);
 
-        env.setStreamTimeCharacteristic(TimeCharacteristic.IngestionTime);
+        DataStream<String> inputData1 = env.readTextFile(input);
 
-        DataStream<String> inputData = env.readTextFile(input);
-
-        DataStream<TaxiTrip> trips = inputData
+        DataStream<CellBasedTaxiTrip> trips1 = inputData1
                 .flatMap(new Parser())
                 .assignTimestampsAndWatermarks(new AscendingTimestampExtractor<TaxiTrip>() {
                     @Override
                     public long extractAscendingTimestamp(TaxiTrip taxiTrip) {
-                        return System.currentTimeMillis();
+                        return taxiTrip.getDropoff_datetime().atZone(ZoneId.systemDefault()).toEpochSecond();
+                    }
+                })
+                .flatMap(new ToCellBasedTaxiTrip());
+
+
+        DataStream<String> inputData2 = env.readTextFile(input);
+
+        DataStream<CellBasedTaxiTrip> trips2 = inputData2
+                .flatMap(new Parser())
+                .assignTimestampsAndWatermarks(new AscendingTimestampExtractor<TaxiTrip>() {
+                    @Override
+                    public long extractAscendingTimestamp(TaxiTrip taxiTrip) {
+                        return taxiTrip.getDropoff_datetime().atZone(ZoneId.systemDefault()).toEpochSecond();
+                    }
+                })
+                .flatMap(new ToCellBasedTaxiTrip());
+
+
+        DataStream<String> mostProfitableCellIDs = trips2.timeWindowAll(Time.of(10, TimeUnit.MINUTES), Time.of(1, TimeUnit.MINUTES))
+                .apply(new AllWindowFunction<CellBasedTaxiTrip, String, TimeWindow>() {
+                    @Override
+                    public void apply(TimeWindow timeWindow, Iterable<CellBasedTaxiTrip> iterable, Collector<String> collector) throws Exception {
+                        Map<String, Double> scores = new HashMap<>();
+                        for (CellBasedTaxiTrip taxiTrip : iterable) {
+                            scores.put(taxiTrip.getStart_cell_id(), scores.getOrDefault(taxiTrip.getStart_cell_id(), 0d) + taxiTrip.getTotal_amount());
+                        }
+
+                        if (!scores.isEmpty()) {
+
+                            double maxScore = scores.entrySet().iterator().next().getValue();
+                            String maxId = scores.entrySet().iterator().next().getKey();
+
+                            for (Map.Entry<String, Double> idAndScore : scores.entrySet()) {
+                                if (idAndScore.getValue() > maxScore) {
+                                    maxScore = idAndScore.getValue();
+                                    maxId = idAndScore.getKey();
+                                }
+                            }
+
+                            collector.collect(maxId);
+                        }
                     }
                 });
 
-        SingleOutputStreamOperator<CellBasedTaxiTrip> cellBasedTaxiTrips = trips.flatMap(new ToCellBasedTaxiTrip());
-
-        SingleOutputStreamOperator<TenMostProfitableAreas> mostProfitableAreas = cellBasedTaxiTrips.process(new TopTenCells());
-
-
-        cellBasedTaxiTrips
+        trips1
+                .join(mostProfitableCellIDs)
+                .where(new KeySelector<CellBasedTaxiTrip, String>() {
+                    @Override
+                    public String getKey(CellBasedTaxiTrip cellBasedTaxiTrip) throws Exception {
+                        return cellBasedTaxiTrip.getStart_cell_id();
+                    }
+                })
+                .equalTo(new KeySelector<String, String>() {
+                    @Override
+                    public String getKey(String s) throws Exception {
+                        return s;
+                    }
+                })
+                .window(SlidingEventTimeWindows.of(Time.of(10, TimeUnit.MINUTES), Time.of(1, TimeUnit.MINUTES)))
+                .apply(new JoinFunction<CellBasedTaxiTrip, String, CellBasedTaxiTrip>() {
+                    @Override
+                    public CellBasedTaxiTrip join(CellBasedTaxiTrip trip, String s) throws Exception {
+                        return trip;
+                    }
+                })
                 .process(new TopTenRoutes())
                 .setParallelism(1)
                 .writeAsText(output, FileSystem.WriteMode.OVERWRITE)
@@ -147,7 +206,7 @@ public class Solution {
 
             //increase score of new entry
             if (scoreKeeper.increase(trip)) {
-                collector.collect(TenMostFrequentTrips.fromList(trip, scoreKeeper.getPodium(), delay(context)));
+                collector.collect(TenMostFrequentTrips.fromList(trip, scoreKeeper.getPodium(), delay(trip)));
             }
 
             Iterator<CellBasedTaxiTrip> iterator = last30Minutes.iterator();
@@ -157,7 +216,7 @@ public class Solution {
                 CellBasedTaxiTrip oldTrip = iterator.next();
                 if (oldTrip.getEnd_time().isBefore(trip.getEnd_time().minusMinutes(30))) {
                     if (scoreKeeper.decrease(trip)) {
-                        collector.collect(TenMostFrequentTrips.fromList(trip, scoreKeeper.getPodium(), delay(context)));
+                        collector.collect(TenMostFrequentTrips.fromList(trip, scoreKeeper.getPodium(), delay(trip)));
                     }
                     iterator.remove();
                 } else {
@@ -166,25 +225,9 @@ public class Solution {
             }
         }
 
-        private double delay(Context context) {
-            return System.currentTimeMillis() - context.timestamp();
+        private double delay(CellBasedTaxiTrip trip) {
+            return System.currentTimeMillis() - trip.getIngestionTime();
         }
 
-    }
-
-    private static class TopTenCells extends ProcessFunction<CellBasedTaxiTrip, TenMostProfitableAreas> {
-
-        private AverageScoreKeeper<CellBasedTaxiTrip> scoreKeeper = new AverageScoreKeeper<>(10);
-
-        private ArrayList<CellBasedTaxiTrip> last30Minutes = new ArrayList<>();
-
-        @Override
-        public void processElement(CellBasedTaxiTrip trip, Context context, Collector<TenMostProfitableAreas> collector) throws Exception {
-
-        }
-
-        private double delay(Context context) {
-            return System.currentTimeMillis() - context.timestamp();
-        }
     }
 }
