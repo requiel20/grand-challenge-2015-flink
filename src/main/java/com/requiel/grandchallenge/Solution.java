@@ -42,7 +42,7 @@ public class Solution {
     private static Logger log = LoggerFactory.getLogger(Solution.class);
 
     private static String DEFAULT_INPUT_FILE = "grand-challenge-data.csv";
-    private static String DEFAULT_OUTPUT_FILE = "/home/requiel/Downloads/grand-challenge-output";
+    private static String DEFAULT_OUTPUT_FILE = "grand-challenge-output";
 
     public static void main(String[] args) throws Exception {
 
