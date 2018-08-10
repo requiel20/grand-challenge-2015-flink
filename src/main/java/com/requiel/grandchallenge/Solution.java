@@ -52,6 +52,8 @@ public class Solution {
 
         final StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
 
+        env.disableOperatorChaining();
+
         env.setStreamTimeCharacteristic(TimeCharacteristic.IngestionTime);
 
         DataStream<String> inputData = env.readTextFile(input);
