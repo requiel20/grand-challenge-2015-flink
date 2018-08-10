@@ -14,7 +14,7 @@ public class CellBasedTaxiTrip {
 
     private double total_amount;
 
-    public CellBasedTaxiTrip(String start_cell_id, String end_cell_id, LocalDateTime end_time, LocalDateTime start_time) {
+    public CellBasedTaxiTrip(String start_cell_id, String end_cell_id, LocalDateTime end_time, LocalDateTime start_time, double total_amount) {
         if (start_cell_id == null || end_cell_id == null | end_time == null | start_time == null) {
             throw new IllegalArgumentException("null fields not permitted here");
         }
@@ -22,6 +22,12 @@ public class CellBasedTaxiTrip {
         this.end_cell_id = end_cell_id;
         this.end_time = end_time;
         this.start_time = start_time;
+
+        if(total_amount <= 0) {
+            throw new IllegalArgumentException("total amount must be positive");
+        }
+        this.total_amount = total_amount;
+
     }
 
     public String getStart_cell_id() {
@@ -38,6 +44,10 @@ public class CellBasedTaxiTrip {
 
     public LocalDateTime getStart_time() {
         return start_time;
+    }
+
+    public double getTotal_amount() {
+        return total_amount;
     }
 
     @Override

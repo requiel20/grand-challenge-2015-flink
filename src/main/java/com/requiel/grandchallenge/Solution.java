@@ -1,11 +1,11 @@
 package com.requiel.grandchallenge;
 
+import com.requiel.grandchallenge.scorekeeper.AverageScoreKeeper;
 import com.requiel.grandchallenge.scorekeeper.BucketScoreKeeper;
-import com.requiel.grandchallenge.scorekeeper.ScoreKeeper;
-import com.requiel.grandchallenge.scorekeeper.StupidScoreKeeper;
 import com.requiel.grandchallenge.types.CellBasedTaxiTrip;
 import com.requiel.grandchallenge.types.TaxiTrip;
 import com.requiel.grandchallenge.types.TenMostFrequentTrips;
+import com.requiel.grandchallenge.types.TenMostProfitableAreas;
 import org.apache.flink.api.common.functions.FlatMapFunction;
 import org.apache.flink.api.common.functions.RichFlatMapFunction;
 import org.apache.flink.api.java.utils.ParameterTool;
@@ -74,8 +74,11 @@ public class Solution {
 
         SingleOutputStreamOperator<CellBasedTaxiTrip> cellBasedTaxiTrips = trips.flatMap(new ToCellBasedTaxiTrip());
 
+        SingleOutputStreamOperator<TenMostProfitableAreas> mostProfitableAreas = cellBasedTaxiTrips.process(new TopTenCells());
+
+
         cellBasedTaxiTrips
-                .process(new TopTen())
+                .process(new TopTenRoutes())
                 .setParallelism(1)
                 .writeAsText(output, FileSystem.WriteMode.OVERWRITE)
                 .setParallelism(1);
@@ -129,12 +132,12 @@ public class Solution {
                 return;
             }
 
-            collector.collect(new CellBasedTaxiTrip(startCellX + "." + startCellY, endCellX + "." + endCellY, taxiTrip.getDropoff_datetime(), taxiTrip.getPickup_datetime()));
+            collector.collect(new CellBasedTaxiTrip(startCellX + "." + startCellY, endCellX + "." + endCellY, taxiTrip.getDropoff_datetime(), taxiTrip.getPickup_datetime(), taxiTrip.getTotal_amount()));
         }
     }
 
-    private static class TopTen extends ProcessFunction<CellBasedTaxiTrip, TenMostFrequentTrips> {
-        private ScoreKeeper<CellBasedTaxiTrip> scoreKeeper = new BucketScoreKeeper<>(10);
+    private static class TopTenRoutes extends ProcessFunction<CellBasedTaxiTrip, TenMostFrequentTrips> {
+        private BucketScoreKeeper<CellBasedTaxiTrip> scoreKeeper = new BucketScoreKeeper<>(10);
 
         private ArrayList<CellBasedTaxiTrip> last30Minutes = new ArrayList<>();
 
@@ -167,5 +170,21 @@ public class Solution {
             return System.currentTimeMillis() - context.timestamp();
         }
 
+    }
+
+    private static class TopTenCells extends ProcessFunction<CellBasedTaxiTrip, TenMostProfitableAreas> {
+
+        private AverageScoreKeeper<CellBasedTaxiTrip> scoreKeeper = new AverageScoreKeeper<>(10);
+
+        private ArrayList<CellBasedTaxiTrip> last30Minutes = new ArrayList<>();
+
+        @Override
+        public void processElement(CellBasedTaxiTrip trip, Context context, Collector<TenMostProfitableAreas> collector) throws Exception {
+
+        }
+
+        private double delay(Context context) {
+            return System.currentTimeMillis() - context.timestamp();
+        }
     }
 }

@@ -7,28 +7,24 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Set;
 
-public class BucketScoreKeeper<T> implements ScoreKeeper<T> {
+public class BucketScoreKeeper<T> implements java.io.Serializable {
 
     public static long serialVersionUID = 1L;
-
-    private int podiumSize;
-
+    protected int podiumSize;
     /**
      * Keeps track at which bucket in the array every element is.
      */
-    private HashMap<T, Integer> positions = new HashMap<>();
-
+    protected HashMap<T, Integer> positions = new HashMap<>();
     /**
      * Has buckets of elements in descending order of score. Bucket at index 0
      * keeps element of score 1.
      */
-    private ArrayList<Set<T>> inOrder = new ArrayList<>();
+    protected ArrayList<Set<T>> inOrder = new ArrayList<>();
 
     public BucketScoreKeeper(int podiumSize) {
         this.podiumSize = podiumSize;
     }
 
-    @Override
     public boolean increase(T element) {
         if (positions.containsKey(element)) {
             int newBucket = moveToNextBucket(element);
@@ -50,7 +46,6 @@ public class BucketScoreKeeper<T> implements ScoreKeeper<T> {
         }
     }
 
-    @Override
     public boolean decrease(T element) {
         if (positions.containsKey(element)) {
             int newBucket = moveToPreviousBucket(element);
@@ -69,7 +64,7 @@ public class BucketScoreKeeper<T> implements ScoreKeeper<T> {
     /**
      * @return the new bucket index
      */
-    private int moveToNextBucket(T element) {
+    protected int moveToNextBucket(T element) {
         int oldBucket = positions.get(element);
 
         positions.put(element, oldBucket + 1);
@@ -84,7 +79,7 @@ public class BucketScoreKeeper<T> implements ScoreKeeper<T> {
         return oldBucket + 1;
     }
 
-    private int lastBucketOnPodium() {
+    protected int lastBucketOnPodium() {
         int elementsOnPodium = 0;
         int lastBucketOnPodium = inOrder.size() - 1;
 
@@ -99,17 +94,6 @@ public class BucketScoreKeeper<T> implements ScoreKeeper<T> {
         return lastBucketOnPodium;
     }
 
-    private void addNewElement(T element) {
-        positions.put(element, 0);
-
-        //first element
-        if (inOrder.isEmpty()) {
-            inOrder.add(new HashSet<>());
-        }
-
-        inOrder.get(0).add(element);
-    }
-
     private void addBucketsUntil(int untilIndex) {
         for (int i = inOrder.size(); i < untilIndex + 1; i++) {
             inOrder.add(new HashSet<>());
@@ -119,7 +103,7 @@ public class BucketScoreKeeper<T> implements ScoreKeeper<T> {
     /**
      * @return the index of the new bucket
      */
-    private int moveToPreviousBucket(T element) {
+    protected int moveToPreviousBucket(T element) {
         int oldBucket = positions.get(element);
 
         if (oldBucket == 0) {
@@ -137,7 +121,17 @@ public class BucketScoreKeeper<T> implements ScoreKeeper<T> {
         return oldBucket - 1;
     }
 
-    @Override
+    protected void addNewElement(T element) {
+        positions.put(element, 0);
+
+        //first element
+        if (inOrder.isEmpty()) {
+            inOrder.add(new HashSet<>());
+        }
+
+        inOrder.get(0).add(element);
+    }
+
     public List<T> getPodium() {
         ArrayList<T> podium = new ArrayList<>();
         int bucketToAdd = inOrder.size() - 1;

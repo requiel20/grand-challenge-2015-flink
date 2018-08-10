@@ -1,6 +1,5 @@
 package scorekeeper;
 
-import com.requiel.grandchallenge.scorekeeper.StupidScoreKeeper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
