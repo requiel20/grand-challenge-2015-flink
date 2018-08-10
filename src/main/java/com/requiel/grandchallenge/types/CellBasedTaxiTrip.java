@@ -12,6 +12,8 @@ public class CellBasedTaxiTrip {
 
     private LocalDateTime start_time;
 
+    private double total_amount;
+
     public CellBasedTaxiTrip(String start_cell_id, String end_cell_id, LocalDateTime end_time, LocalDateTime start_time) {
         if (start_cell_id == null || end_cell_id == null | end_time == null | start_time == null) {
             throw new IllegalArgumentException("null fields not permitted here");
