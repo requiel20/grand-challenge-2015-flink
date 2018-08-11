@@ -9,9 +9,6 @@ import org.apache.flink.api.common.functions.JoinFunction;
 import org.apache.flink.api.common.functions.RichFlatMapFunction;
 import org.apache.flink.api.java.functions.KeySelector;
 import org.apache.flink.api.java.utils.ParameterTool;
-import org.apache.flink.configuration.Configuration;
-import org.apache.flink.configuration.CoreOptions;
-import org.apache.flink.configuration.JobManagerOptions;
 import org.apache.flink.core.fs.FileSystem;
 import org.apache.flink.streaming.api.TimeCharacteristic;
 import org.apache.flink.streaming.api.datastream.DataStream;
@@ -19,7 +16,7 @@ import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
 import org.apache.flink.streaming.api.functions.ProcessFunction;
 import org.apache.flink.streaming.api.functions.timestamps.AscendingTimestampExtractor;
 import org.apache.flink.streaming.api.functions.windowing.AllWindowFunction;
-import org.apache.flink.streaming.api.windowing.assigners.SlidingEventTimeWindows;
+import org.apache.flink.streaming.api.windowing.assigners.TumblingEventTimeWindows;
 import org.apache.flink.streaming.api.windowing.time.Time;
 import org.apache.flink.streaming.api.windowing.windows.TimeWindow;
 import org.apache.flink.util.Collector;
@@ -90,7 +87,7 @@ public class Solution {
                 .flatMap(new ToCellBasedTaxiTrip());
 
 
-        DataStream<String> mostProfitableCellIDs = trips2.timeWindowAll(Time.of(10, TimeUnit.MINUTES), Time.of(1, TimeUnit.MINUTES))
+        DataStream<String> mostProfitableCellIDs = trips2.timeWindowAll(Time.of(10, TimeUnit.MINUTES))
                 .apply(new AllWindowFunction<CellBasedTaxiTrip, String, TimeWindow>() {
                     @Override
                     public void apply(TimeWindow timeWindow, Iterable<CellBasedTaxiTrip> iterable, Collector<String> collector) throws Exception {
@@ -114,7 +111,7 @@ public class Solution {
                             collector.collect(maxId);
                         }
                     }
-                });
+                }).setSelectivity(1/6);
 
         trips1
                 .join(mostProfitableCellIDs)
@@ -130,7 +127,7 @@ public class Solution {
                         return s;
                     }
                 })
-                .window(SlidingEventTimeWindows.of(Time.of(10, TimeUnit.MINUTES), Time.of(1, TimeUnit.MINUTES)))
+                .window(TumblingEventTimeWindows.of(Time.of(10, TimeUnit.MINUTES)))
                 .apply(new JoinFunction<CellBasedTaxiTrip, String, CellBasedTaxiTrip>() {
                     @Override
                     public CellBasedTaxiTrip join(CellBasedTaxiTrip trip, String s) throws Exception {
