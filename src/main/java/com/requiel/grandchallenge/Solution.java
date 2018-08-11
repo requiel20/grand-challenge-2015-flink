@@ -111,7 +111,7 @@ public class Solution {
                             collector.collect(maxId);
                         }
                     }
-                }).setSelectivity(1/6);
+                }).setSelectivity(1d/6d);
 
         trips1
                 .join(mostProfitableCellIDs)
