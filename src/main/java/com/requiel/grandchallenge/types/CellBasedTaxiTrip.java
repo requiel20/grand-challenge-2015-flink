@@ -16,6 +16,9 @@ public class CellBasedTaxiTrip {
 
     private double total_amount;
 
+    private long delay;
+
+
     public CellBasedTaxiTrip(String start_cell_id, String end_cell_id, LocalDateTime end_time, LocalDateTime start_time, double total_amount) {
         if (start_cell_id == null || end_cell_id == null | end_time == null | start_time == null) {
             throw new IllegalArgumentException("null fields not permitted here");
@@ -72,5 +75,26 @@ public class CellBasedTaxiTrip {
 
     public long getIngestionTime() {
         return ingestionTime;
+    }
+
+    public void calculateDelay() {
+        this.delay = System.currentTimeMillis() - ingestionTime;
+    }
+
+    public long getDelay() {
+        return delay;
+    }
+
+    @Override
+    public String toString() {
+        return "CellBasedTaxiTrip{" +
+                "start_cell_id='" + start_cell_id + '\'' +
+                ", end_cell_id='" + end_cell_id + '\'' +
+                ", end_time=" + end_time +
+                ", start_time=" + start_time +
+                ", ingestionTime=" + ingestionTime +
+                ", total_amount=" + total_amount +
+                ", delay=" + delay +
+                '}';
     }
 }
