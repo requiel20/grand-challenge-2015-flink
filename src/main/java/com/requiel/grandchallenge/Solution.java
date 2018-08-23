@@ -134,8 +134,6 @@ public class Solution {
                         return trip;
                     }
                 })
-                .process(new TopTenRoutes())
-                .setParallelism(1)
                 .writeAsText(output, FileSystem.WriteMode.OVERWRITE)
                 .setParallelism(1);
 
