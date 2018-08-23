@@ -5,9 +5,7 @@ import com.requiel.grandchallenge.types.CellBasedTaxiTrip;
 import com.requiel.grandchallenge.types.TaxiTrip;
 import com.requiel.grandchallenge.types.TenMostFrequentTrips;
 import org.apache.flink.api.common.functions.FlatMapFunction;
-import org.apache.flink.api.common.functions.JoinFunction;
 import org.apache.flink.api.common.functions.RichFlatMapFunction;
-import org.apache.flink.api.java.functions.KeySelector;
 import org.apache.flink.api.java.utils.ParameterTool;
 import org.apache.flink.core.fs.FileSystem;
 import org.apache.flink.streaming.api.TimeCharacteristic;
@@ -15,20 +13,13 @@ import org.apache.flink.streaming.api.datastream.DataStream;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
 import org.apache.flink.streaming.api.functions.ProcessFunction;
 import org.apache.flink.streaming.api.functions.timestamps.AscendingTimestampExtractor;
-import org.apache.flink.streaming.api.functions.windowing.AllWindowFunction;
-import org.apache.flink.streaming.api.windowing.assigners.SlidingEventTimeWindows;
-import org.apache.flink.streaming.api.windowing.time.Time;
-import org.apache.flink.streaming.api.windowing.windows.TimeWindow;
 import org.apache.flink.util.Collector;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.time.ZoneId;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.Iterator;
-import java.util.Map;
-import java.util.concurrent.TimeUnit;
 
 /**
  * To package your application into a JAR file for execution, run
@@ -74,66 +65,7 @@ public class Solution {
                 .flatMap(new ToCellBasedTaxiTrip());
 
 
-        DataStream<String> inputData2 = env.readTextFile(input);
-
-        DataStream<CellBasedTaxiTrip> trips2 = inputData2
-                .flatMap(new Parser())
-                .assignTimestampsAndWatermarks(new AscendingTimestampExtractor<TaxiTrip>() {
-                    @Override
-                    public long extractAscendingTimestamp(TaxiTrip taxiTrip) {
-                        return taxiTrip.getDropoff_datetime().atZone(ZoneId.systemDefault()).toEpochSecond();
-                    }
-                })
-                .flatMap(new ToCellBasedTaxiTrip());
-
-
-        DataStream<String> mostProfitableCellIDs = trips2.timeWindowAll(Time.of(10, TimeUnit.MINUTES), Time.of(1, TimeUnit.MINUTES))
-                .apply(new AllWindowFunction<CellBasedTaxiTrip, String, TimeWindow>() {
-                    @Override
-                    public void apply(TimeWindow timeWindow, Iterable<CellBasedTaxiTrip> iterable, Collector<String> collector) throws Exception {
-                        Map<String, Double> scores = new HashMap<>();
-                        for (CellBasedTaxiTrip taxiTrip : iterable) {
-                            scores.put(taxiTrip.getStart_cell_id(), scores.getOrDefault(taxiTrip.getStart_cell_id(), 0d) + taxiTrip.getTotal_amount());
-                        }
-
-                        if (!scores.isEmpty()) {
-
-                            double maxScore = scores.entrySet().iterator().next().getValue();
-                            String maxId = scores.entrySet().iterator().next().getKey();
-
-                            for (Map.Entry<String, Double> idAndScore : scores.entrySet()) {
-                                if (idAndScore.getValue() > maxScore) {
-                                    maxScore = idAndScore.getValue();
-                                    maxId = idAndScore.getKey();
-                                }
-                            }
-
-                            collector.collect(maxId);
-                        }
-                    }
-                }).setSelectivity(1d/6d);
-
         trips1
-                .join(mostProfitableCellIDs)
-                .where(new KeySelector<CellBasedTaxiTrip, String>() {
-                    @Override
-                    public String getKey(CellBasedTaxiTrip cellBasedTaxiTrip) throws Exception {
-                        return cellBasedTaxiTrip.getStart_cell_id();
-                    }
-                })
-                .equalTo(new KeySelector<String, String>() {
-                    @Override
-                    public String getKey(String s) throws Exception {
-                        return s;
-                    }
-                })
-                .window(SlidingEventTimeWindows.of(Time.of(10, TimeUnit.MINUTES), Time.of(1, TimeUnit.MINUTES)))
-                .apply(new JoinFunction<CellBasedTaxiTrip, String, CellBasedTaxiTrip>() {
-                    @Override
-                    public CellBasedTaxiTrip join(CellBasedTaxiTrip trip, String s) throws Exception {
-                        return trip;
-                    }
-                })
                 .process(new TopTenRoutes())
                 .setParallelism(1)
                 .writeAsText(output, FileSystem.WriteMode.OVERWRITE)
