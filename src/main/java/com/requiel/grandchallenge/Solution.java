@@ -6,6 +6,7 @@ import com.requiel.grandchallenge.types.TaxiTrip;
 import com.requiel.grandchallenge.types.TenMostFrequentTrips;
 import org.apache.flink.api.common.functions.FlatMapFunction;
 import org.apache.flink.api.common.functions.JoinFunction;
+import org.apache.flink.api.common.functions.MapFunction;
 import org.apache.flink.api.common.functions.RichFlatMapFunction;
 import org.apache.flink.api.java.functions.KeySelector;
 import org.apache.flink.api.java.utils.ParameterTool;
@@ -38,7 +39,7 @@ public class Solution {
 
     private static Logger log = LoggerFactory.getLogger(Solution.class);
 
-    private static String DEFAULT_INPUT_FILE = "grand-challenge-data.csv";
+    private static String DEFAULT_INPUT_FILE = "grand-challenge-data-short.csv";
     private static String DEFAULT_OUTPUT_FILE = "grand-challenge-output";
 
     public static void main(String[] args) throws Exception {
@@ -134,11 +135,22 @@ public class Solution {
                         return trip;
                     }
                 })
+                .map(new DelaySetter())
                 .writeAsText(output, FileSystem.WriteMode.OVERWRITE)
                 .setParallelism(1);
 
         env.execute("Grand challenge 2015");
     }
+
+    private static class DelaySetter implements MapFunction<CellBasedTaxiTrip, CellBasedTaxiTrip> {
+
+        @Override
+        public CellBasedTaxiTrip map(CellBasedTaxiTrip cellBasedTaxiTrip) throws Exception {
+            cellBasedTaxiTrip.calculateDelay();
+            return cellBasedTaxiTrip;
+        }
+    }
+
 
     private static class Parser extends RichFlatMapFunction<String, TaxiTrip> {
         @Override
