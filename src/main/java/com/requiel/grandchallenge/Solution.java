@@ -16,7 +16,7 @@ import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
 import org.apache.flink.streaming.api.functions.ProcessFunction;
 import org.apache.flink.streaming.api.functions.timestamps.AscendingTimestampExtractor;
 import org.apache.flink.streaming.api.functions.windowing.AllWindowFunction;
-import org.apache.flink.streaming.api.windowing.assigners.TumblingEventTimeWindows;
+import org.apache.flink.streaming.api.windowing.assigners.SlidingEventTimeWindows;
 import org.apache.flink.streaming.api.windowing.time.Time;
 import org.apache.flink.streaming.api.windowing.windows.TimeWindow;
 import org.apache.flink.util.Collector;
@@ -87,7 +87,7 @@ public class Solution {
                 .flatMap(new ToCellBasedTaxiTrip());
 
 
-        DataStream<String> mostProfitableCellIDs = trips2.timeWindowAll(Time.of(10, TimeUnit.MINUTES))
+        DataStream<String> mostProfitableCellIDs = trips2.timeWindowAll(Time.of(10, TimeUnit.MINUTES), Time.of(1, TimeUnit.MINUTES))
                 .apply(new AllWindowFunction<CellBasedTaxiTrip, String, TimeWindow>() {
                     @Override
                     public void apply(TimeWindow timeWindow, Iterable<CellBasedTaxiTrip> iterable, Collector<String> collector) throws Exception {
@@ -127,7 +127,7 @@ public class Solution {
                         return s;
                     }
                 })
-                .window(TumblingEventTimeWindows.of(Time.of(10, TimeUnit.MINUTES)))
+                .window(SlidingEventTimeWindows.of(Time.of(10, TimeUnit.MINUTES), Time.of(1, TimeUnit.MINUTES)))
                 .apply(new JoinFunction<CellBasedTaxiTrip, String, CellBasedTaxiTrip>() {
                     @Override
                     public CellBasedTaxiTrip join(CellBasedTaxiTrip trip, String s) throws Exception {
