@@ -4,7 +4,7 @@ import java.time.LocalDateTime;
 import java.util.List;
 
 public class TenMostFrequentTrips {
-    public static TenMostFrequentTrips fromList(CellBasedTaxiTrip trigger, List<CellBasedTaxiTrip> inOrder, double delay) {
+    public static TenMostFrequentTrips fromList(CellBasedTaxiTrip trigger, List<CellBasedTaxiTrip> inOrder, long delay) {
         if(trigger == null || inOrder == null || delay < 0 || inOrder.size() != 10) {
             throw new IllegalArgumentException();
         }
@@ -79,9 +79,9 @@ public class TenMostFrequentTrips {
     private String start_cell_id_10;
     private String end_cell_id_10;
 
-    private double delay;
+    private long delay;
 
-    public TenMostFrequentTrips(LocalDateTime pickup_datetime, LocalDateTime dropoff_datetime, String start_cell_id_1, String end_cell_id_1, String start_cell_id_2, String end_cell_id_2, String start_cell_id_3, String end_cell_id_3, String start_cell_id_4, String end_cell_id_4, String start_cell_id_5, String end_cell_id_5, String start_cell_id_6, String end_cell_id_6, String start_cell_id_7, String end_cell_id_7, String start_cell_id_8, String end_cell_id_8, String start_cell_id_9, String end_cell_id_9, String start_cell_id_10, String end_cell_id_10, double delay) {
+    public TenMostFrequentTrips(LocalDateTime pickup_datetime, LocalDateTime dropoff_datetime, String start_cell_id_1, String end_cell_id_1, String start_cell_id_2, String end_cell_id_2, String start_cell_id_3, String end_cell_id_3, String start_cell_id_4, String end_cell_id_4, String start_cell_id_5, String end_cell_id_5, String start_cell_id_6, String end_cell_id_6, String start_cell_id_7, String end_cell_id_7, String start_cell_id_8, String end_cell_id_8, String start_cell_id_9, String end_cell_id_9, String start_cell_id_10, String end_cell_id_10, long delay) {
         this.pickup_datetime = pickup_datetime;
         this.dropoff_datetime = dropoff_datetime;
         this.start_cell_id_1 = start_cell_id_1;
@@ -195,7 +195,7 @@ public class TenMostFrequentTrips {
         return end_cell_id_10;
     }
 
-    public double getDelay() {
+    public long getDelay() {
         return delay;
     }
 

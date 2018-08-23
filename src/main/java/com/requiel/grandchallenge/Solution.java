@@ -222,7 +222,7 @@ public class Solution {
             }
         }
 
-        private double delay(CellBasedTaxiTrip trip) {
+        private long delay(CellBasedTaxiTrip trip) {
             return System.currentTimeMillis() - trip.getIngestionTime();
         }
 
