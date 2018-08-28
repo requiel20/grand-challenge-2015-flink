@@ -2,6 +2,7 @@ package com.requiel.grandchallenge;
 
 import com.requiel.grandchallenge.scorekeeper.BucketScoreKeeper;
 import com.requiel.grandchallenge.types.CellBasedTaxiTrip;
+import com.requiel.grandchallenge.types.SerializableJedis;
 import com.requiel.grandchallenge.types.TaxiTrip;
 import com.requiel.grandchallenge.types.TenMostFrequentTrips;
 import org.apache.flink.api.common.functions.FlatMapFunction;
@@ -98,7 +99,7 @@ public class Solution {
         //index to retrieve
         private long count = 0L;
 
-        Jedis jedis;
+        SerializableJedis jedis;
 
         private volatile boolean isRunning = true;
 
@@ -106,7 +107,7 @@ public class Solution {
         private transient ListState<Long> checkpointedCount;
 
         public RedisCheckpointedSource(String host) {
-            jedis = new Jedis(host, 6379);
+            jedis = new SerializableJedis(host, 6379);
         }
 
         @Override
