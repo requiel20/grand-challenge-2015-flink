@@ -94,7 +94,7 @@ public class Solution {
 
     private static class RedisCheckpointedSource implements SourceFunction<String>, CheckpointedFunction {
         //index to retrieve
-        private long count = 0L;
+        private long count = 1L;
 
         SerializableJedis jedis;
 
