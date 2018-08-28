@@ -2,15 +2,21 @@ package com.requiel.grandchallenge;
 
 import com.requiel.grandchallenge.scorekeeper.BucketScoreKeeper;
 import com.requiel.grandchallenge.types.CellBasedTaxiTrip;
+import com.requiel.grandchallenge.types.SerializableJedis;
 import com.requiel.grandchallenge.types.TaxiTrip;
 import com.requiel.grandchallenge.types.TenMostFrequentTrips;
 import org.apache.flink.api.common.functions.FlatMapFunction;
 import org.apache.flink.api.common.functions.JoinFunction;
 import org.apache.flink.api.common.functions.RichFlatMapFunction;
+import org.apache.flink.api.common.state.ListState;
+import org.apache.flink.api.common.state.ListStateDescriptor;
 import org.apache.flink.api.java.functions.KeySelector;
 import org.apache.flink.api.java.utils.ParameterTool;
 import org.apache.flink.core.fs.FileSystem;
+import org.apache.flink.runtime.state.FunctionInitializationContext;
+import org.apache.flink.runtime.state.FunctionSnapshotContext;
 import org.apache.flink.streaming.api.TimeCharacteristic;
+import org.apache.flink.streaming.api.checkpoint.CheckpointedFunction;
 import org.apache.flink.streaming.api.datastream.DataStream;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
 import org.apache.flink.streaming.api.functions.ProcessFunction;
@@ -38,18 +44,11 @@ public class Solution {
 
     private static Logger log = LoggerFactory.getLogger(Solution.class);
 
-    private static String DEFAULT_INPUT_FILE = "grand-challenge-data.csv";
     private static String DEFAULT_OUTPUT_FILE = "grand-challenge-output";
 
     public static void main(String[] args) throws Exception {
 
-        String input, output;
-
-        try {
-            input = ParameterTool.fromArgs(args).get("input", DEFAULT_INPUT_FILE);
-        } catch (Exception e) {
-            input = DEFAULT_INPUT_FILE;
-        }
+        String output;
 
         try {
             output = ParameterTool.fromArgs(args).get("output", DEFAULT_OUTPUT_FILE);
@@ -65,53 +64,36 @@ public class Solution {
 
         DataStream<CellBasedTaxiTrip> trips1 = inputData1
                 .flatMap(new Parser())
+                .setSelectivity(1)
                 .assignTimestampsAndWatermarks(new AscendingTimestampExtractor<TaxiTrip>() {
                     @Override
                     public long extractAscendingTimestamp(TaxiTrip taxiTrip) {
                         return taxiTrip.getDropoff_datetime().atZone(ZoneId.systemDefault()).toEpochSecond();
                     }
                 })
-                .flatMap(new ToCellBasedTaxiTrip());
+                .flatMap(new ToCellBasedTaxiTrip())
+                .setSelectivity(0.33d);
 
 
-        DataStream<String> inputData2 = env.readTextFile(input);
+        DataStream<String> inputData2 = env.addSource(new RedisCheckpointedSource("192.168.56.106"))
+                .setGeoLocationKey("location2");
 
         DataStream<CellBasedTaxiTrip> trips2 = inputData2
                 .flatMap(new Parser())
+                .setSelectivity(1)
                 .assignTimestampsAndWatermarks(new AscendingTimestampExtractor<TaxiTrip>() {
                     @Override
                     public long extractAscendingTimestamp(TaxiTrip taxiTrip) {
                         return taxiTrip.getDropoff_datetime().atZone(ZoneId.systemDefault()).toEpochSecond();
                     }
                 })
-                .flatMap(new ToCellBasedTaxiTrip());
+                .flatMap(new ToCellBasedTaxiTrip())
+                .setSelectivity(0.33d);
 
 
         DataStream<String> mostProfitableCellIDs = trips2.timeWindowAll(Time.of(10, TimeUnit.MINUTES), Time.of(1, TimeUnit.MINUTES))
-                .apply(new AllWindowFunction<CellBasedTaxiTrip, String, TimeWindow>() {
-                    @Override
-                    public void apply(TimeWindow timeWindow, Iterable<CellBasedTaxiTrip> iterable, Collector<String> collector) throws Exception {
-                        Map<String, Double> scores = new HashMap<>();
-                        for (CellBasedTaxiTrip taxiTrip : iterable) {
-                            scores.put(taxiTrip.getStart_cell_id(), scores.getOrDefault(taxiTrip.getStart_cell_id(), 0d) + taxiTrip.getTotal_amount());
-                        }
-
-                        if (!scores.isEmpty()) {
-
-                            double maxScore = scores.entrySet().iterator().next().getValue();
-                            String maxId = scores.entrySet().iterator().next().getKey();
-
-                            for (Map.Entry<String, Double> idAndScore : scores.entrySet()) {
-                                if (idAndScore.getValue() > maxScore) {
-                                    maxScore = idAndScore.getValue();
-                                    maxId = idAndScore.getKey();
-                                }
-                            }
-
-                            collector.collect(maxId);
-                        }
-                    }
-                }).setSelectivity(1d/6d);
+                .apply(new MostProfitableCells())
+                .setSelectivity(1d/6d);
 
         trips1
                 .join(mostProfitableCellIDs)
@@ -148,6 +130,31 @@ public class Solution {
             TaxiTrip trip = TaxiTrip.fromString(line);
             if (trip != null) {
                 collector.collect(trip);
+            }
+        }
+    }
+
+    private static class MostProfitableCells implements AllWindowFunction<CellBasedTaxiTrip, String, TimeWindow> {
+        @Override
+        public void apply(TimeWindow timeWindow, Iterable<CellBasedTaxiTrip> iterable, Collector<String> collector) throws Exception {
+            Map<String, Double> scores = new HashMap<>();
+            for (CellBasedTaxiTrip taxiTrip : iterable) {
+                scores.put(taxiTrip.getStart_cell_id(), scores.getOrDefault(taxiTrip.getStart_cell_id(), 0d) + taxiTrip.getTotal_amount());
+            }
+
+            if (!scores.isEmpty()) {
+
+                double maxScore = scores.entrySet().iterator().next().getValue();
+                String maxId = scores.entrySet().iterator().next().getKey();
+
+                for (Map.Entry<String, Double> idAndScore : scores.entrySet()) {
+                    if (idAndScore.getValue() > maxScore) {
+                        maxScore = idAndScore.getValue();
+                        maxId = idAndScore.getKey();
+                    }
+                }
+
+                collector.collect(maxId);
             }
         }
     }
