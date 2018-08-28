@@ -2,9 +2,11 @@ package com.requiel.grandchallenge;
 
 import com.requiel.grandchallenge.scorekeeper.BucketScoreKeeper;
 import com.requiel.grandchallenge.types.CellBasedTaxiTrip;
-import com.requiel.grandchallenge.types.SerializableJedis;
 import com.requiel.grandchallenge.types.TaxiTrip;
 import com.requiel.grandchallenge.types.TenMostFrequentTrips;
+import io.lettuce.core.RedisClient;
+import io.lettuce.core.api.sync.RedisCommands;
+import io.lettuce.core.protocol.RedisCommand;
 import org.apache.flink.api.common.functions.FlatMapFunction;
 import org.apache.flink.api.common.functions.JoinFunction;
 import org.apache.flink.api.common.functions.RichFlatMapFunction;
@@ -60,8 +62,11 @@ public class Solution {
         final StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
 
         env.setStreamTimeCharacteristic(TimeCharacteristic.EventTime);
+        env.getConfig().registerTypeWithKryoSerializer(RedisCommand.class, org.apache.flink.api.java.typeutils.runtime.kryo.JavaSerializer.class);
 
-        DataStream<String> inputData1 = env.addSource(new RedisCheckpointedSource("192.168.56.103"))
+        env.getConfig().registerTypeWithKryoSerializer(RedisClient.class, org.apache.flink.api.java.typeutils.runtime.kryo.JavaSerializer.class);
+
+        DataStream<String> inputData1 = env.addSource(new RedisCheckpointedSource("127.0.0.1"))
                 .setGeoLocationKey("location1");
 
         DataStream<CellBasedTaxiTrip> trips1 = inputData1
@@ -76,7 +81,7 @@ public class Solution {
                 .flatMap(new ToCellBasedTaxiTrip())
                 .setSelectivity(0.33d);
 
-        DataStream<String> inputData2 = env.addSource(new RedisCheckpointedSource("192.168.56.106"))
+        DataStream<String> inputData2 = env.addSource(new RedisCheckpointedSource("127.0.0.1"))
                 .setGeoLocationKey("location2");
 
         DataStream<CellBasedTaxiTrip> trips2 = inputData2
@@ -94,7 +99,7 @@ public class Solution {
 
         DataStream<String> mostProfitableCellIDs = trips2.timeWindowAll(Time.of(10, TimeUnit.MINUTES), Time.of(1, TimeUnit.MINUTES))
                 .apply(new MostProfitableCells())
-                .setSelectivity(1d/6d);
+                .setSelectivity(1d / 6d);
 
         trips1
                 .join(mostProfitableCellIDs)
@@ -164,7 +169,7 @@ public class Solution {
         //index to retrieve
         private long count = 1L;
 
-        SerializableJedis jedis;
+        String host;
 
         private volatile boolean isRunning = true;
 
@@ -172,7 +177,7 @@ public class Solution {
         private transient ListState<Long> checkpointedCount;
 
         public RedisCheckpointedSource(String host) {
-            jedis = new SerializableJedis(host, 6379);
+            this.host = host;
         }
 
         @Override
@@ -196,11 +201,12 @@ public class Solution {
 
         @Override
         public void run(SourceContext<String> context) throws Exception {
+            RedisCommands<String, String> redisConnection = RedisClient.create("redis://" + host).connect().sync();
             while (isRunning) {
                 // this synchronized block ensures that state checkpointing,
                 // internal state updates and emission of elements are an atomic operation
                 synchronized (context.getCheckpointLock()) {
-                    String elem = jedis.get("" + count);
+                    String elem = redisConnection.get("" + count);
                     if (elem != null) {
                         context.collect(elem);
                     } else {
