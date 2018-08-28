@@ -16,8 +16,6 @@ import org.apache.flink.runtime.state.FunctionSnapshotContext;
 import org.apache.flink.streaming.api.TimeCharacteristic;
 import org.apache.flink.streaming.api.checkpoint.CheckpointedFunction;
 import org.apache.flink.streaming.api.datastream.DataStream;
-import org.apache.flink.streaming.api.datastream.DataStreamSource;
-import org.apache.flink.streaming.api.datastream.SingleOutputStreamOperator;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
 import org.apache.flink.streaming.api.functions.ProcessFunction;
 import org.apache.flink.streaming.api.functions.source.SourceFunction;
@@ -25,7 +23,6 @@ import org.apache.flink.streaming.api.functions.timestamps.AscendingTimestampExt
 import org.apache.flink.util.Collector;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import redis.clients.jedis.Jedis;
 
 import java.time.ZoneId;
 import java.util.ArrayList;
@@ -131,11 +128,16 @@ public class Solution {
 
         @Override
         public void run(SourceContext<String> context) throws Exception {
-            while (isRunning && count < 1000) {
+            while (isRunning) {
                 // this synchronized block ensures that state checkpointing,
                 // internal state updates and emission of elements are an atomic operation
                 synchronized (context.getCheckpointLock()) {
-                    context.collect(jedis.get("" + count));
+                    String elem = jedis.get("" + count);
+                    if (elem != null) {
+                        context.collect(elem);
+                    } else {
+                        cancel();
+                    }
                     count++;
                 }
             }
