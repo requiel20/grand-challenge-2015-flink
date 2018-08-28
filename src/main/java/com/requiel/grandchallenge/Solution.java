@@ -20,6 +20,7 @@ import org.apache.flink.streaming.api.checkpoint.CheckpointedFunction;
 import org.apache.flink.streaming.api.datastream.DataStream;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
 import org.apache.flink.streaming.api.functions.ProcessFunction;
+import org.apache.flink.streaming.api.functions.source.SourceFunction;
 import org.apache.flink.streaming.api.functions.timestamps.AscendingTimestampExtractor;
 import org.apache.flink.streaming.api.functions.windowing.AllWindowFunction;
 import org.apache.flink.streaming.api.windowing.assigners.SlidingEventTimeWindows;
@@ -60,7 +61,8 @@ public class Solution {
 
         env.setStreamTimeCharacteristic(TimeCharacteristic.EventTime);
 
-        DataStream<String> inputData1 = env.readTextFile(input);
+        DataStream<String> inputData1 = env.addSource(new RedisCheckpointedSource("192.168.56.103"))
+                .setGeoLocationKey("location1");
 
         DataStream<CellBasedTaxiTrip> trips1 = inputData1
                 .flatMap(new Parser())
@@ -156,6 +158,63 @@ public class Solution {
 
                 collector.collect(maxId);
             }
+        }
+    }
+
+    private static class RedisCheckpointedSource implements SourceFunction<String>, CheckpointedFunction {
+        //index to retrieve
+        private long count = 0L;
+
+        SerializableJedis jedis;
+
+        private volatile boolean isRunning = true;
+
+        //keeps the state
+        private transient ListState<Long> checkpointedCount;
+
+        public RedisCheckpointedSource(String host) {
+            jedis = new SerializableJedis(host, 6379);
+        }
+
+        @Override
+        public void snapshotState(FunctionSnapshotContext functionSnapshotContext) throws Exception {
+            this.checkpointedCount.clear();
+            this.checkpointedCount.add(count);
+        }
+
+        @Override
+        public void initializeState(FunctionInitializationContext context) throws Exception {
+            this.checkpointedCount = context
+                    .getOperatorStateStore()
+                    .getListState(new ListStateDescriptor<>("count", Long.class));
+
+            if (context.isRestored()) {
+                for (Long count : this.checkpointedCount.get()) {
+                    this.count = count;
+                }
+            }
+        }
+
+        @Override
+        public void run(SourceContext<String> context) throws Exception {
+            while (isRunning) {
+                // this synchronized block ensures that state checkpointing,
+                // internal state updates and emission of elements are an atomic operation
+                synchronized (context.getCheckpointLock()) {
+                    String elem = jedis.get("" + count);
+                    if (elem != null) {
+                        context.collect(elem);
+                    } else {
+                        cancel();
+                    }
+                    count++;
+                }
+            }
+        }
+
+        @Override
+        public void cancel() {
+            isRunning = false;
         }
     }
 
