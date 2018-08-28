@@ -61,7 +61,7 @@ public class Solution {
 
         env.setStreamTimeCharacteristic(TimeCharacteristic.EventTime);
 
-        DataStream<String> inputData1 = env.addSource(new RedisCheckpointedSource("127.0.0.0"))
+        DataStream<String> inputData1 = env.addSource(new RedisCheckpointedSource("192.168.56.103"))
                 .setGeoLocationKey("location1");
 
         DataStream<CellBasedTaxiTrip> trips1 = inputData1
@@ -76,8 +76,7 @@ public class Solution {
                 .flatMap(new ToCellBasedTaxiTrip())
                 .setSelectivity(0.33d);
 
-
-        DataStream<String> inputData2 = env.addSource(new RedisCheckpointedSource("127.0.0.0"))
+        DataStream<String> inputData2 = env.addSource(new RedisCheckpointedSource("192.168.56.106"))
                 .setGeoLocationKey("location2");
 
         DataStream<CellBasedTaxiTrip> trips2 = inputData2
