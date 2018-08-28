@@ -61,7 +61,7 @@ public class Solution {
 
         env.setStreamTimeCharacteristic(TimeCharacteristic.EventTime);
 
-        DataStream<String> inputData1 = env.addSource(new RedisCheckpointedSource("192.168.56.103"))
+        DataStream<String> inputData1 = env.addSource(new RedisCheckpointedSource("127.0.0.0"))
                 .setGeoLocationKey("location1");
 
         DataStream<CellBasedTaxiTrip> trips1 = inputData1
@@ -77,7 +77,7 @@ public class Solution {
                 .setSelectivity(0.33d);
 
 
-        DataStream<String> inputData2 = env.addSource(new RedisCheckpointedSource("192.168.56.106"))
+        DataStream<String> inputData2 = env.addSource(new RedisCheckpointedSource("127.0.0.0"))
                 .setGeoLocationKey("location2");
 
         DataStream<CellBasedTaxiTrip> trips2 = inputData2
@@ -163,7 +163,7 @@ public class Solution {
 
     private static class RedisCheckpointedSource implements SourceFunction<String>, CheckpointedFunction {
         //index to retrieve
-        private long count = 0L;
+        private long count = 1L;
 
         SerializableJedis jedis;
 

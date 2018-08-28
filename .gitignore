@@ -3,3 +3,5 @@ target/*
 out/*
 grand-challenge-data*
 grand-challenge-output*
+.settings/*
+.project
