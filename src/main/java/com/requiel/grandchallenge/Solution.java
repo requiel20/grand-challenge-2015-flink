@@ -65,6 +65,8 @@ public class Solution {
         try {
             maxRecords = Integer.parseInt(ParameterTool.fromArgs(args).get("max-records", DEFAULT_OUTPUT_FILE));
         } catch (Exception e) {
+            log.error("parameter tools read max-records as: " + ParameterTool.fromArgs(args).get("max-records", DEFAULT_OUTPUT_FILE));
+            e.printStackTrace();
             maxRecords = DEFAULT_MAX_RECORDS;
         }
 
