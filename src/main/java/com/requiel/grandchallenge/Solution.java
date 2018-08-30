@@ -48,15 +48,24 @@ public class Solution {
     private static Logger log = LoggerFactory.getLogger(Solution.class);
 
     private static String DEFAULT_OUTPUT_FILE = "grand-challenge-output";
+    private static int DEFAULT_MAX_RECORDS = 111111;
 
     public static void main(String[] args) throws Exception {
 
         String output;
 
+        int maxRecords;
+
         try {
             output = ParameterTool.fromArgs(args).get("output", DEFAULT_OUTPUT_FILE);
         } catch (Exception e) {
             output = DEFAULT_OUTPUT_FILE;
+        }
+
+        try {
+            maxRecords = Integer.parseInt(ParameterTool.fromArgs(args).get("max-records", DEFAULT_OUTPUT_FILE));
+        } catch (Exception e) {
+            maxRecords = DEFAULT_MAX_RECORDS;
         }
 
         final StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
@@ -66,7 +75,7 @@ public class Solution {
 
         env.getConfig().registerTypeWithKryoSerializer(RedisClient.class, org.apache.flink.api.java.typeutils.runtime.kryo.JavaSerializer.class);
 
-        DataStream<String> inputData1 = env.addSource(new RedisCheckpointedSource("192.168.56.103"))
+        DataStream<String> inputData1 = env.addSource(new RedisCheckpointedSource("192.168.56.103", maxRecords))
                 .setGeoLocationKey("location1");
 
         DataStream<CellBasedTaxiTrip> trips1 = inputData1
@@ -81,7 +90,7 @@ public class Solution {
                 .flatMap(new ToCellBasedTaxiTrip())
                 .setSelectivity(0.33d);
 
-        DataStream<String> inputData2 = env.addSource(new RedisCheckpointedSource("192.168.56.106"))
+        DataStream<String> inputData2 = env.addSource(new RedisCheckpointedSource("192.168.56.106", maxRecords))
                 .setGeoLocationKey("location2");
 
         DataStream<CellBasedTaxiTrip> trips2 = inputData2
@@ -166,6 +175,8 @@ public class Solution {
     }
 
     private static class RedisCheckpointedSource implements SourceFunction<String>, CheckpointedFunction {
+        private final int maxRecords;
+
         //index to retrieve
         private long count = 1L;
 
@@ -176,8 +187,9 @@ public class Solution {
         //keeps the state
         private transient ListState<Long> checkpointedCount;
 
-        public RedisCheckpointedSource(String host) {
+        public RedisCheckpointedSource(String host, int maxRecords) {
             this.host = host;
+            this.maxRecords = maxRecords;
         }
 
         @Override
@@ -202,7 +214,7 @@ public class Solution {
         @Override
         public void run(SourceContext<String> context) throws Exception {
             RedisCommands<String, String> redisConnection = RedisClient.create("redis://" + host).connect().sync();
-            while (isRunning) {
+            while (isRunning && count <= maxRecords) {
                 // this synchronized block ensures that state checkpointing,
                 // internal state updates and emission of elements are an atomic operation
                 synchronized (context.getCheckpointLock()) {
